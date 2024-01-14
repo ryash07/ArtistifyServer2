@@ -53,6 +53,10 @@ async function run() {
     const ubJewellersDB = client.db("ubJewellersDB");
     const productCollection = ubJewellersDB.collection("products");
     const reviewCollection = ubJewellersDB.collection("reviews");
+    const navNotificationCollection =
+      ubJewellersDB.collection("navNotifications");
+    const categoryCollection = ubJewellersDB.collection("categories");
+    const cartCollection = ubJewellersDB.collection("cart");
 
     // generate JWT Token related api
     app.post("/jwt", async (req, res) => {
@@ -63,6 +67,12 @@ async function run() {
       });
 
       res.send({ token });
+    });
+
+    // NAV NOTIFICATIONS GET METHOD
+    app.get("/nav-notifications", async (req, res) => {
+      const result = await navNotificationCollection.find({}).toArray();
+      res.send(result);
     });
 
     // PRODUCTS RELATED GET METHOD
@@ -99,8 +109,6 @@ async function run() {
       const size = req.query?.size?.toLowerCase() || "all";
       const carate = parseInt(req.query?.carate) || "all";
       const searchText = req.query?.search?.toLowerCase() || "";
-
-      console.log(carate);
 
       let result;
 
@@ -152,34 +160,26 @@ async function run() {
       res.send(result);
     });
 
-    // filter by sizes
-    app.get("/products/size/:size", async (req, res) => {
-      const size = req.params?.size.toLowerCase();
-
-      if (size === "all") {
-        const result = await productCollection.find({}).toArray();
-        return res.send(result);
-      }
-      const result = await productCollection
-        .find({ size: { $regex: size, $options: "i" } })
-        .toArray();
-      res.send(result);
-    });
-
-    // filter by price range
-    app.get("/products/price", async (req, res) => {
-      const minPrice = req.query.minprice || 0;
-      const maxPrice = req.query.maxprice || Number.POSITIVE_INFINITY;
-      let sortOrder = req.query.sort;
-
-      let result;
-
+    // CATEGORIES GET METHOD
+    app.get("/categories", async (req, res) => {
+      const result = await categoryCollection.find({}).toArray();
       res.send(result);
     });
 
     // ALL REVIEWS GET METHOD
     app.get("/reviews", async (req, res) => {
       const result = await reviewCollection.find({}).toArray();
+      res.send(result);
+    });
+
+    // CART RELATED API
+    app.get("/cart", async (req, res) => {
+      const result = await cartCollection.find({}).toArray();
+      res.send(result);
+    });
+    app.post("/cart", async (req, res) => {
+      const body = req.body;
+      const result = await cartCollection.insertOne(body);
       res.send(result);
     });
 
