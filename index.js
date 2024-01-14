@@ -65,7 +65,7 @@ async function run() {
       res.send({ token });
     });
 
-    // PRODUCTS GET METHOD
+    // PRODUCTS RELATED GET METHOD
     app.get("/products", async (req, res) => {
       // search  query
       const productSearchText = req.query?.searchText;
@@ -89,16 +89,91 @@ async function run() {
       res.send(result);
     });
 
-    app.get("/products/category/:category", async (req, res) => {
-      const category = req.params?.category.toLowerCase();
+    // filter by category, price, sortOrder size, carate, search
+    app.get("/products/filter", async (req, res) => {
+      const category = req.query?.category?.toLowerCase() || "all";
+      const minPrice = parseFloat(req.query?.minPrice) || 0;
+      const maxPrice =
+        parseFloat(req.query?.maxPrice) || Number.POSITIVE_INFINITY;
+      let priceSortOrder = req.query?.priceOrder || "all";
+      const size = req.query?.size?.toLowerCase() || "all";
+      const carate = parseInt(req.query?.carate) || "all";
+      const searchText = req.query?.search?.toLowerCase() || "";
+
+      console.log(carate);
+
+      let result;
+
+      // filter by category
 
       if (category === "all") {
+        result = await productCollection.find({}).toArray();
+      } else {
+        result = await productCollection
+          .find({ category: { $regex: category, $options: "i" } })
+          .toArray();
+      }
+
+      // filter by price
+      result = result.filter(
+        (product) => product.price >= minPrice && product.price <= maxPrice
+      );
+
+      // sort by price
+      if (priceSortOrder !== "all") {
+        result.sort((a, b) => {
+          return priceSortOrder === "asc"
+            ? a.price - b.price // ascending order
+            : b.price - a.price; // descending order?
+        });
+      }
+
+      // filter by size
+      if (size !== "all") {
+        result = result.filter(
+          (product) => product.size.toLowerCase() === size
+        );
+      }
+
+      // filter by carate
+      if (carate !== "all") {
+        result = result.filter((product) => product.carate === carate);
+      }
+
+      // filter by search
+      if (searchText !== "") {
+        result = result.filter(
+          (product) =>
+            product.name.toLowerCase().includes(searchText) ||
+            product.category.toLowerCase().includes(searchText)
+        );
+      }
+
+      res.send(result);
+    });
+
+    // filter by sizes
+    app.get("/products/size/:size", async (req, res) => {
+      const size = req.params?.size.toLowerCase();
+
+      if (size === "all") {
         const result = await productCollection.find({}).toArray();
         return res.send(result);
       }
       const result = await productCollection
-        .find({ category: { $regex: category, $options: "i" } })
+        .find({ size: { $regex: size, $options: "i" } })
         .toArray();
+      res.send(result);
+    });
+
+    // filter by price range
+    app.get("/products/price", async (req, res) => {
+      const minPrice = req.query.minprice || 0;
+      const maxPrice = req.query.maxprice || Number.POSITIVE_INFINITY;
+      let sortOrder = req.query.sort;
+
+      let result;
+
       res.send(result);
     });
 
