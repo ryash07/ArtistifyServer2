@@ -1,7 +1,7 @@
 const express = require("express");
 const cors = require("cors");
 const app = express();
-const { MongoClient, ServerApiVersion } = require("mongodb");
+const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const port = process.env.PORT || 5000;
 require("dotenv").config();
 
@@ -57,6 +57,7 @@ async function run() {
       ubJewellersDB.collection("navNotifications");
     const categoryCollection = ubJewellersDB.collection("categories");
     const cartCollection = ubJewellersDB.collection("cart");
+    const wishlistCollection = ubJewellersDB.collection("wishlist");
 
     // generate JWT Token related api
     app.post("/jwt", async (req, res) => {
@@ -177,9 +178,70 @@ async function run() {
       const result = await cartCollection.find({}).toArray();
       res.send(result);
     });
+
+    app.get("/cart/subtotal", async (req, res) => {
+      const cartData = await cartCollection.find({}).toArray();
+
+      const subtotal = cartData.reduce((total, item) => {
+        const price = item.price || 0;
+        const quantity = item.quantity || 0;
+        return total + price * quantity;
+      }, 0);
+
+      res.send({ subtotal });
+    });
+
     app.post("/cart", async (req, res) => {
       const body = req.body;
       const result = await cartCollection.insertOne(body);
+      res.send(result);
+    });
+
+    app.patch("/cart/:id", async (req, res) => {
+      const id = req.params.id;
+      let quantity = parseInt(req.body.quantity);
+      const operation = req.body.operation;
+
+      if (operation === "plus") {
+        quantity += 1;
+      } else {
+        if (quantity > 0) quantity -= 1;
+      }
+
+      const filter = { _id: new ObjectId(id) };
+      const updatedDoc = {
+        $set: {
+          quantity: quantity,
+        },
+      };
+
+      const options = { upsert: true };
+
+      const result = await cartCollection.updateOne(
+        filter,
+        updatedDoc,
+        options
+      );
+      res.send(result);
+    });
+
+    app.delete("/cart/:id", async (req, res) => {
+      const id = req.params.id;
+
+      const filter = { _id: new ObjectId(id) };
+      const result = await cartCollection.deleteOne(filter);
+      res.send(result);
+    });
+
+    // WISHLIST RELATED API
+    app.get("/wishlist", async (req, res) => {
+      const result = await wishlistCollection.find({}).toArray();
+      res.send(result);
+    });
+
+    app.post("/wishlist", async (req, res) => {
+      const body = req.body;
+      const result = await wishlistCollection.insertOne(body);
       res.send(result);
     });
 
