@@ -74,8 +74,18 @@ async function run() {
 
     // USERS RELATED API
     app.post("/users", async (req, res) => {
-      const body = req.body;
-      const result = await userCollection.insertOne(body);
+      const user = req.body;
+      const userExists = await userCollection.findOne({ email: user?.email });
+
+      console.log(userExists);
+
+      if (userExists) {
+        return res.send({ error: true, message: "user already exists" });
+      }
+
+      // add createdAt key to user obj
+      user.createdAt = new Date();
+      const result = await userCollection.insertOne(user);
       res.send(result);
     });
 
