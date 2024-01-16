@@ -73,11 +73,15 @@ async function run() {
     });
 
     // USERS RELATED API
+    app.get("/user", async (req, res) => {
+      const email = req.query.email;
+      const result = await userCollection.findOne({ email: email });
+      res.send(result);
+    });
+
     app.post("/users", async (req, res) => {
       const user = req.body;
       const userExists = await userCollection.findOne({ email: user?.email });
-
-      console.log(userExists);
 
       if (userExists) {
         return res.send({ error: true, message: "user already exists" });
@@ -86,6 +90,41 @@ async function run() {
       // add createdAt key to user obj
       user.createdAt = new Date();
       const result = await userCollection.insertOne(user);
+      res.send(result);
+    });
+
+    // add user's addresses
+    app.patch("/users/shipping-address", async (req, res) => {
+      const email = req.query.email;
+      const body = req.body;
+      const filter = { email: email };
+
+      const updatedDoc = {
+        $set: {
+          shippingAddress: body,
+        },
+      };
+
+      const options = { upsert: true };
+
+      const result = await userCollection.updateOne(
+        filter,
+        updatedDoc,
+        options
+      );
+      res.send(result);
+    });
+
+    // delete user's shipping address
+    app.patch("/users/delete-address", async (req, res) => {
+      const email = req.query.email;
+      const filter = { email: email };
+      const updatedDoc = {
+        $unset: {
+          shippingAddress: null,
+        },
+      };
+      const result = await userCollection.updateOne(filter, updatedDoc);
       res.send(result);
     });
 
