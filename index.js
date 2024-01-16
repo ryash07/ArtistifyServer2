@@ -4,6 +4,7 @@ const app = express();
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const port = process.env.PORT || 5000;
 require("dotenv").config();
+const CryptoJS = require("crypto-js");
 
 // middlewares
 app.use(cors());
@@ -51,6 +52,7 @@ async function run() {
     await client.connect();
 
     const ubJewellersDB = client.db("ubJewellersDB");
+    const userCollection = ubJewellersDB.collection("users");
     const productCollection = ubJewellersDB.collection("products");
     const reviewCollection = ubJewellersDB.collection("reviews");
     const navNotificationCollection =
@@ -70,7 +72,50 @@ async function run() {
       res.send({ token });
     });
 
+    // USERS RELATED API
+    app.post("/users", async (req, res) => {
+      const body = req.body;
+      const result = await userCollection.insertOne(body);
+      res.send(result);
+    });
+
     // NAV NOTIFICATIONS GET METHOD
+    app.post("/nav-notifications", async (req, res) => {
+      const notificationArr = [
+        "Flash Sale Going On Till 5th January!",
+        "Discount up to 35% for first purchase only this month.",
+        "Free Shipping! First in Town.",
+        "Exclusive prices only for the month",
+        "Black Friday Coming. Hurry Up!",
+        "Best offers every week! 40% Off!",
+      ];
+
+      for (const notification of notificationArr) {
+        // creating hash to uniquely identify notifications
+        const notificationHash = CryptoJS.MD5(notification).toString();
+
+        const existingNotification = await navNotificationCollection.findOne({
+          notificationHash,
+        });
+        if (!existingNotification) {
+          const today = new Date();
+          const expireAt = new Date(today);
+          expireAt.setMonth(expireAt.getMonth() + 2);
+
+          const newNotification = {
+            notificationHash,
+            notification,
+            createdAt: today,
+            expireAt,
+          };
+
+          await navNotificationCollection.insertOne(newNotification);
+        }
+      }
+
+      res.send({ success: true });
+    });
+
     app.get("/nav-notifications", async (req, res) => {
       const result = await navNotificationCollection.find({}).toArray();
       res.send(result);
@@ -175,12 +220,14 @@ async function run() {
 
     // CART RELATED API
     app.get("/cart", async (req, res) => {
-      const result = await cartCollection.find({}).toArray();
+      const email = req.query?.email;
+      const result = await cartCollection.find({ email: email }).toArray();
       res.send(result);
     });
 
     app.get("/cart/subtotal", async (req, res) => {
-      const cartData = await cartCollection.find({}).toArray();
+      const email = req.query.email;
+      const cartData = await cartCollection.find({ email: email }).toArray();
 
       const subtotal = cartData.reduce((total, item) => {
         const price = item.price || 0;
@@ -235,7 +282,8 @@ async function run() {
 
     // WISHLIST RELATED API
     app.get("/wishlist", async (req, res) => {
-      const result = await wishlistCollection.find({}).toArray();
+      const email = req.query?.email;
+      const result = await wishlistCollection.find({ email: email }).toArray();
       res.send(result);
     });
 
