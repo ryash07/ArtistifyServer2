@@ -5,6 +5,7 @@ const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const port = process.env.PORT || 5000;
 require("dotenv").config();
 const CryptoJS = require("crypto-js");
+const stripe = require("stripe")(process.env.PAYMENT_GATEWAY_SECRET_KEY);
 
 // middlewares
 app.use(cors());
@@ -60,6 +61,7 @@ async function run() {
     const categoryCollection = ubJewellersDB.collection("categories");
     const cartCollection = ubJewellersDB.collection("cart");
     const wishlistCollection = ubJewellersDB.collection("wishlist");
+    const orderCollection = ubJewellersDB.collection("orders");
 
     // generate JWT Token related api
     app.post("/jwt", async (req, res) => {
@@ -284,7 +286,7 @@ async function run() {
         return total + price * quantity;
       }, 0);
 
-      res.send({ subtotal });
+      res.send({ subtotal: subtotal.toFixed(2) });
     });
 
     app.post("/cart", async (req, res) => {
@@ -329,6 +331,12 @@ async function run() {
       res.send(result);
     });
 
+    app.delete("/delete-cart-items", async (req, res) => {
+      const email = req.query.email;
+      const result = await cartCollection.deleteMany({ email: email });
+      res.send(result);
+    });
+
     // WISHLIST RELATED API
     app.get("/wishlist", async (req, res) => {
       const email = req.query?.email;
@@ -339,6 +347,40 @@ async function run() {
     app.post("/wishlist", async (req, res) => {
       const body = req.body;
       const result = await wishlistCollection.insertOne(body);
+      res.send(result);
+    });
+
+    // STRIPE PAYMENT RELATED API
+    app.post("/create-payment-intent", async (req, res) => {
+      const { orderPrice } = req.body;
+      const amountInCent = parseInt(parseFloat(orderPrice) * 100);
+
+      const paymentIntent = await stripe.paymentIntents.create({
+        amount: amountInCent,
+        currency: "usd",
+        automatic_payment_methods: {
+          enabled: true,
+        },
+      });
+
+      res.send({
+        clientSecret: paymentIntent.client_secret,
+      });
+    });
+
+    // ORDERS RELATED API
+    app.get("/orders", async (req, res) => {
+      const email = req.query.email;
+      const result = await orderCollection.find({ email: email }).toArray();
+      res.send(result);
+    });
+
+    app.post("/orders", async (req, res) => {
+      const orderObj = req.body;
+
+      // add date to body
+      orderObj.date = new Date();
+      const result = await orderCollection.insertOne(orderObj);
       res.send(result);
     });
 
