@@ -393,6 +393,13 @@ async function run() {
       res.send(result);
     });
 
+    app.delete("/delete-review/:email", async (req, res) => {
+      const email = req.params.email;
+
+      const result = await reviewCollection.deleteOne({ email: email });
+      res.send(result);
+    });
+
     // CART RELATED API
     app.get("/cart", async (req, res) => {
       const email = req.query?.email;
