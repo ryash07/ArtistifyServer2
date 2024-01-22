@@ -297,7 +297,6 @@ async function run() {
     });
 
     // add new review to a product
-
     app.post("/products/add-review/:id", async (req, res) => {
       const id = req.params.id;
       const newReview = req.body;
@@ -325,6 +324,61 @@ async function run() {
         res.send(result);
       }
     );
+
+    // update like status of review of a single product
+    app.post("/single-product-like-update", async (req, res) => {
+      const { productId, reviewId, email } = req.body;
+
+      const product = await productCollection.findOne({
+        _id: new ObjectId(productId),
+      });
+      const review = product?.review?.find(
+        (r) => new ObjectId(r._id) == reviewId
+      );
+
+      // initialize likeCount and likedBy array
+      if (!review.likeCount) {
+        review.likeCount = 0;
+      }
+      if (!review.likedBy) {
+        review.likedBy = [];
+      }
+
+      // check if user already like the review
+      const likedByLoggedUser = review?.likedBy?.includes(email);
+
+      console.log(likedByLoggedUser);
+
+      if (likedByLoggedUser) {
+        if (review.likeCount > 0) {
+          review.likeCount -= 1;
+          review.likedBy = review.likedBy.filter(
+            (userEmail) => userEmail !== email
+          );
+        } else {
+          review.likeCount = 0;
+          review.likedBy = review.likedBy.filter(
+            (userEmail) => userEmail !== email
+          );
+        }
+      } else {
+        review.likeCount += 1;
+        review.likedBy.push(email);
+      }
+
+      const result = await productCollection.updateOne(
+        { _id: new ObjectId(productId) },
+        {
+          $set: { review: product.review },
+        }
+      );
+
+      res.send({
+        ...result,
+        likeCount: review.likeCount,
+        likedByLoggedUser: !likedByLoggedUser,
+      });
+    });
 
     // CATEGORIES GET METHOD
     app.get("/categories", async (req, res) => {
