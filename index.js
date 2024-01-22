@@ -198,7 +198,7 @@ async function run() {
       res.send(result);
     });
 
-    // PRODUCTS RELATED GET METHOD
+    // PRODUCTS RELATED API
     app.get("/products", async (req, res) => {
       // search  query
       const productSearchText = req.query?.searchText;
@@ -347,8 +347,6 @@ async function run() {
       // check if user already like the review
       const likedByLoggedUser = review?.likedBy?.includes(email);
 
-      console.log(likedByLoggedUser);
-
       if (likedByLoggedUser) {
         if (review.likeCount > 0) {
           review.likeCount -= 1;
@@ -373,11 +371,7 @@ async function run() {
         }
       );
 
-      res.send({
-        ...result,
-        likeCount: review.likeCount,
-        likedByLoggedUser: !likedByLoggedUser,
-      });
+      res.send(result);
     });
 
     // CATEGORIES GET METHOD
@@ -389,6 +383,13 @@ async function run() {
     // ALL REVIEWS GET METHOD
     app.get("/reviews", async (req, res) => {
       const result = await reviewCollection.find({}).toArray();
+      result.sort((a, b) => new Date(b.addedAt) - new Date(a.addedAt));
+      res.send(result);
+    });
+    app.post("/add-review", async (req, res) => {
+      const body = req.body;
+      body.addedAt = new Date(body.addedAt);
+      const result = await reviewCollection.insertOne(body);
       res.send(result);
     });
 
