@@ -81,6 +81,32 @@ async function run() {
       res.send(result);
     });
 
+    app.patch("/update-user", async (req, res) => {
+      const email = req.query.email;
+      const { fullName, mobileNumber, dob, gender, location } = req.body;
+      const filter = { email: email };
+
+      const updatedDoc = {
+        $set: {
+          name: fullName,
+          mobileNumber,
+          dob,
+          gender,
+          location,
+        },
+      };
+
+      const options = { upsert: true };
+
+      const result = await userCollection.updateOne(
+        filter,
+        updatedDoc,
+        options
+      );
+
+      res.send(result);
+    });
+
     app.post("/users", async (req, res) => {
       const user = req.body;
       const userExists = await userCollection.findOne({ email: user?.email });
@@ -193,6 +219,19 @@ async function run() {
         return res.send(result);
       }
       const result = await productCollection.find({}).toArray();
+
+      res.send(result);
+    });
+
+    app.get("/single-product/:id", async (req, res) => {
+      const id = req.params.id;
+      const filter = { _id: new ObjectId(id) };
+
+      const result = await productCollection.findOne(filter);
+      result.review.sort(
+        (a, b) => new Date(b.reviewDate) - new Date(a.reviewDate)
+      );
+
       res.send(result);
     });
 
@@ -257,6 +296,36 @@ async function run() {
       res.send(result);
     });
 
+    // add new review to a product
+
+    app.post("/products/add-review/:id", async (req, res) => {
+      const id = req.params.id;
+      const newReview = req.body;
+      const filter = { _id: new ObjectId(id) };
+
+      newReview.reviewDate = new Date();
+
+      const result = await productCollection.updateOne(filter, {
+        $push: { review: newReview },
+      });
+
+      res.send(result);
+    });
+
+    // delete review of a user from single product reviews
+    app.delete(
+      "/products/delete-review/:id/reviewer-email/:email",
+      async (req, res) => {
+        const { id, email } = req.params;
+        const result = await productCollection.updateOne(
+          { _id: new ObjectId(id) },
+          { $pull: { review: { reviewerEmail: email } } }
+        );
+
+        res.send(result);
+      }
+    );
+
     // CATEGORIES GET METHOD
     app.get("/categories", async (req, res) => {
       const result = await categoryCollection.find({}).toArray();
@@ -273,6 +342,8 @@ async function run() {
     app.get("/cart", async (req, res) => {
       const email = req.query?.email;
       const result = await cartCollection.find({ email: email }).toArray();
+
+      result.sort((a, b) => new Date(b.addedAt) - new Date(a.addedAt));
       res.send(result);
     });
 
