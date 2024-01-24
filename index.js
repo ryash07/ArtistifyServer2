@@ -517,6 +517,15 @@ async function run() {
       res.send(result);
     });
 
+    app.delete("/delete-order/:orderId", async (req, res) => {
+      const orderId = req.params.orderId;
+
+      const result = await orderCollection.deleteOne({
+        _id: new ObjectId(orderId),
+      });
+      res.send(result);
+    });
+
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
     console.log(
