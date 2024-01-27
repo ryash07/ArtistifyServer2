@@ -6,6 +6,7 @@ const port = process.env.PORT || 5000;
 require("dotenv").config();
 const CryptoJS = require("crypto-js");
 const { calculateComparingPercentage } = require("./calculatePercentageChange");
+const { formatSalesData } = require("./formatSalesData");
 const stripe = require("stripe")(process.env.PAYMENT_GATEWAY_SECRET_KEY);
 
 // middlewares
@@ -646,6 +647,118 @@ async function run() {
       };
 
       res.send(response);
+    });
+
+    app.get("/admin-dashboard/top-selling-categories", async (req, res) => {
+      // total number of categories
+      const totalCategories = await categoryCollection.estimatedDocumentCount();
+
+      // find top sold categories
+      const result = await productCollection
+        .aggregate([
+          {
+            $group: {
+              _id: "$category",
+              totalSold: { $sum: "$sold" },
+            },
+          },
+          {
+            $sort: { totalSold: -1 },
+          },
+          {
+            $limit: 6,
+          },
+        ])
+        .toArray();
+
+      res.send({ totalCategories, topCategories: result });
+    });
+
+    // income statistics data for last 5 and current month
+    app.get("/admin-dashboard/income-stats", async (req, res) => {
+      // const currentDate = new Date();
+      // const currentYear = currentDate.getFullYear();
+      // const currentMonth = currentDate.getMonth() + 1; // Months are zero-based in JavaScript
+
+      // // Calculate sales for the last 5 months and the current month
+      // const salesData = await Promise.all(
+      //   Array.from({ length: 6 }).map(async (_, index) => {
+      //     const month = currentMonth - index;
+      //     const year = month <= 0 ? currentYear - 1 : currentYear;
+      //     const monthName = new Date(year, month - 1, 1).toLocaleString(
+      //       "en-US",
+      //       { month: "long" }
+      //     );
+
+      //     const startOfMonth = new Date(year, month - 1, 1);
+      //     const endOfMonth = new Date(year, month, 0, 23, 59, 59, 999);
+
+      //     const totalSales = await orderCollection
+      //       .find({ date: { $gte: startOfMonth, $lte: endOfMonth } })
+      //       .toArray()
+      //       .then((orders) =>
+      //         orders.reduce((acc, order) => acc + parseFloat(order.total), 0)
+      //       )
+      //       .catch((err) => {
+      //         throw err;
+      //       });
+
+      //     return { year, monthName, totalSales: totalSales || 0 };
+      //   })
+      // );
+
+      // // Sort the salesData by year and month
+      // salesData.sort((a, b) => {
+      //   if (a.year !== b.year) {
+      //     return a.year - b.year;
+      //   }
+      //   return a.month - b.month;
+      // });
+
+      const currentDate = new Date();
+      const currentMonth = currentDate.getMonth() + 1; // Months are zero-based in JavaScript
+
+      // Calculate sales for the last 5 months and the current month
+      let salesData = await Promise.all(
+        Array.from({ length: 6 }).map(async (_, index) => {
+          const month = currentMonth - index;
+          const monthName = new Date(2000, month - 1, 1).toLocaleString(
+            "en-US",
+            { month: "long" }
+          );
+
+          const startOfMonth = new Date(
+            currentDate.getFullYear(),
+            month - 1,
+            1
+          );
+          const endOfMonth = new Date(
+            currentDate.getFullYear(),
+            month,
+            0,
+            23,
+            59,
+            59,
+            999
+          );
+
+          const totalSales = await orderCollection
+            .find({ date: { $gte: startOfMonth, $lte: endOfMonth } })
+            .toArray()
+            .then((orders) =>
+              orders.reduce((acc, order) => acc + parseFloat(order.total), 0)
+            )
+            .catch((err) => {
+              throw err;
+            });
+
+          return { monthName, totalSales: totalSales?.toFixed(2) || 0 };
+        })
+      );
+
+      salesData = salesData.sort();
+      salesData = salesData.reverse();
+      res.json(salesData);
     });
 
     // Send a ping to confirm a successful connection
