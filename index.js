@@ -5,6 +5,7 @@ const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const port = process.env.PORT || 5000;
 require("dotenv").config();
 const CryptoJS = require("crypto-js");
+const { calculateComparingPercentage } = require("./calculatePercentageChange");
 const stripe = require("stripe")(process.env.PAYMENT_GATEWAY_SECRET_KEY);
 
 // middlewares
@@ -524,6 +525,127 @@ async function run() {
         _id: new ObjectId(orderId),
       });
       res.send(result);
+    });
+
+    // ADMIN DASHBOARD RELATED API
+    app.get("/admin-dashboard/stats", async (req, res) => {
+      // Get current month and last month start dates
+      const currentDate = new Date();
+      const currentMonthStart = new Date(
+        currentDate.getFullYear(),
+        currentDate.getMonth(),
+        1
+      );
+      const lastMonthStart = new Date(
+        currentDate.getFullYear(),
+        currentDate.getMonth() - 1,
+        1
+      );
+
+      let lastMonth = new Date();
+      lastMonth.setMonth(new Date().getMonth() - 1);
+      lastMonth = lastMonth.toLocaleString("default", { month: "long" });
+
+      // Calculating sales, orders, averageOrder for current month
+      const currentMonthStats = await orderCollection
+        .aggregate([
+          {
+            $match: {
+              date: {
+                $gte: currentMonthStart,
+                $lt: currentDate,
+              },
+            },
+          },
+          {
+            $group: {
+              _id: null,
+              totalSells: { $sum: { $toDouble: "$total" } },
+              totalOrders: { $sum: 1 },
+              averageOrderValue: { $avg: { $toDouble: "$total" } },
+            },
+          },
+        ])
+        .toArray();
+
+      // calculating values of last month
+      const lastMonthStats = await orderCollection
+        .aggregate([
+          {
+            $match: {
+              date: { $gte: lastMonthStart, $lt: currentMonthStart },
+            },
+          },
+          {
+            $group: {
+              _id: null,
+              totalSells: { $sum: { $toDouble: "$total" } },
+              totalOrders: { $sum: 1 },
+              averageOrderValue: { $avg: { $toDouble: "$total" } },
+            },
+          },
+        ])
+        .toArray();
+
+      const currentMonthStatsData = currentMonthStats[0] || {
+        totalSells: 0,
+        totalOrders: 0,
+        averageOrderValue: 0,
+      };
+      const lastMonthStatsData = lastMonthStats[0] || {
+        totalSells: 0,
+        totalOrders: 0,
+        averageOrderValue: 0,
+      };
+
+      // Calculate customers data
+      const newCustomers = await userCollection.countDocuments({
+        createdAt: {
+          $gte: currentMonthStart,
+          $lt: currentDate,
+        },
+      });
+
+      const lastMonthCustomers = await userCollection.countDocuments({
+        createdAt: {
+          $gte: lastMonthStart,
+          $lt: currentMonthStart,
+        },
+      });
+
+      const customerStatsData = { newCustomers, lastMonthCustomers };
+
+      const response = {
+        currentMonthStatsData,
+        lastMonthStatsData: {
+          ...lastMonthStatsData,
+          lastMonth,
+          year: lastMonthStart.getFullYear(),
+        },
+
+        customerStatsData,
+
+        lastMonthComparisonPercentage: {
+          totalSellsPercentage: calculateComparingPercentage(
+            currentMonthStatsData?.totalSells,
+            lastMonthStatsData?.totalSells
+          ),
+          totalOrdersPercentage: calculateComparingPercentage(
+            currentMonthStatsData.totalOrders,
+            lastMonthStatsData.totalOrders
+          ),
+          averageOrderValuePercentage: calculateComparingPercentage(
+            currentMonthStatsData.averageOrderValue,
+            lastMonthStatsData.averageOrderValue
+          ),
+          customersPercentage: calculateComparingPercentage(
+            customerStatsData.newCustomers,
+            customerStatsData.lastMonthCustomers
+          ),
+        },
+      };
+
+      res.send(response);
     });
 
     // Send a ping to confirm a successful connection
