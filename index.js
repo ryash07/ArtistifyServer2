@@ -507,6 +507,9 @@ async function run() {
     app.get("/orders", async (req, res) => {
       const email = req.query.email;
       const result = await orderCollection.find({ email: email }).toArray();
+
+      result.sort((a, b) => new Date(b.date) - new Date(a.date));
+
       res.send(result);
     });
 
@@ -516,14 +519,39 @@ async function run() {
       // add date to body
       orderObj.date = new Date();
       const result = await orderCollection.insertOne(orderObj);
+
+      // increment sold value of the products that are ordered
+      for (const orderItem of orderObj.orderDetails) {
+        const productId = orderItem.productId;
+        const quantity = orderItem.quantity;
+
+        await productCollection.updateOne(
+          { _id: new ObjectId(productId) },
+          { $inc: { sold: quantity } }
+        );
+      }
+
       res.send(result);
     });
 
-    app.delete("/delete-order/:orderId", async (req, res) => {
-      const orderId = req.params.orderId;
+    app.delete("/delete-order/:id", async (req, res) => {
+      const id = req.params.id;
+
+      const orderObj = await orderCollection.findOne({ _id: new ObjectId(id) });
+
+      // decrease sold value of the deleted ordered products
+      for (const orderItem of orderObj.orderDetails) {
+        const productId = orderItem.productId;
+        const quantity = orderItem.quantity;
+
+        await productCollection.updateOne(
+          { _id: new ObjectId(productId) },
+          { $inc: { sold: -quantity } }
+        );
+      }
 
       const result = await orderCollection.deleteOne({
-        _id: new ObjectId(orderId),
+        _id: new ObjectId(id),
       });
       res.send(result);
     });
