@@ -376,9 +376,48 @@ async function run() {
       res.send(result);
     });
 
-    // CATEGORIES GET METHOD
+    // CATEGORIES API
     app.get("/categories", async (req, res) => {
       const result = await categoryCollection.find({}).toArray();
+      result.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+      res.send(result);
+    });
+
+    app.post("/categories", async (req, res) => {
+      const body = req.body;
+      body.createdAt = new Date();
+
+      const result = await categoryCollection.insertOne(body);
+      res.send(result);
+    });
+
+    app.patch("/categories/:id", async (req, res) => {
+      const id = req.params.id;
+      const body = req.body;
+
+      // keep category's prev/original state
+      const prevCategory = await categoryCollection.findOne({
+        _id: new ObjectId(id),
+      });
+      const prevCategoryName = prevCategory?.categoryName;
+
+      const result = await categoryCollection.updateOne(
+        { _id: new ObjectId(id) },
+        {
+          $set: {
+            categoryName: body.categoryName,
+            categoryPic: body.categoryPic,
+          },
+        },
+        { upsert: true }
+      );
+
+      // update category in products as well
+      await productCollection.updateMany(
+        { category: prevCategoryName },
+        { $set: { category: body.categoryName } }
+      );
+
       res.send(result);
     });
 
@@ -771,6 +810,40 @@ async function run() {
       );
 
       res.send(recentReviews?.slice(0, 4));
+    });
+
+    // ADMIN CATEGORIES ROUTE API
+    app.get("/admin/categories", async (req, res) => {
+      const products = await productCollection.find({}).toArray();
+      const categories = await categoryCollection.find({}).toArray();
+      let updatedCategories = categories?.map((c) => {
+        return {
+          categoryId: c._id,
+          categoryName: c.categoryName,
+          categoryPic: c.categoryPic,
+          createdAt: c.createdAt,
+          itemCount: 0,
+        };
+      });
+
+      for (const item of products) {
+        for (let i = 0; i < updatedCategories.length; i++) {
+          if (
+            updatedCategories[i].categoryName?.toLowerCase() ===
+            item.category.toLowerCase()
+          ) {
+            updatedCategories[i].itemCount += 1;
+            matchedFlag = 1;
+            break;
+          }
+        }
+      }
+
+      updatedCategories.sort(
+        (a, b) => new Date(b.createdAt) - new Date(a.createdAt)
+      );
+
+      res.send(updatedCategories);
     });
 
     // Send a ping to confirm a successful connection
