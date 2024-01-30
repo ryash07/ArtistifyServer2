@@ -674,49 +674,10 @@ async function run() {
       res.send({ totalCategories, topCategories: result });
     });
 
-    // income statistics data for last 5 and current month
+    // Income Statistics data for last 5 and current month
     app.get("/admin-dashboard/income-stats", async (req, res) => {
-      // const currentDate = new Date();
-      // const currentYear = currentDate.getFullYear();
-      // const currentMonth = currentDate.getMonth() + 1; // Months are zero-based in JavaScript
-
-      // // Calculate sales for the last 5 months and the current month
-      // const salesData = await Promise.all(
-      //   Array.from({ length: 6 }).map(async (_, index) => {
-      //     const month = currentMonth - index;
-      //     const year = month <= 0 ? currentYear - 1 : currentYear;
-      //     const monthName = new Date(year, month - 1, 1).toLocaleString(
-      //       "en-US",
-      //       { month: "long" }
-      //     );
-
-      //     const startOfMonth = new Date(year, month - 1, 1);
-      //     const endOfMonth = new Date(year, month, 0, 23, 59, 59, 999);
-
-      //     const totalSales = await orderCollection
-      //       .find({ date: { $gte: startOfMonth, $lte: endOfMonth } })
-      //       .toArray()
-      //       .then((orders) =>
-      //         orders.reduce((acc, order) => acc + parseFloat(order.total), 0)
-      //       )
-      //       .catch((err) => {
-      //         throw err;
-      //       });
-
-      //     return { year, monthName, totalSales: totalSales || 0 };
-      //   })
-      // );
-
-      // // Sort the salesData by year and month
-      // salesData.sort((a, b) => {
-      //   if (a.year !== b.year) {
-      //     return a.year - b.year;
-      //   }
-      //   return a.month - b.month;
-      // });
-
       const currentDate = new Date();
-      const currentMonth = currentDate.getMonth() + 1; // Months are zero-based in JavaScript
+      const currentMonth = currentDate.getMonth() + 1;
 
       // Calculate sales for the last 5 months and the current month
       let salesData = await Promise.all(
@@ -759,6 +720,29 @@ async function run() {
       salesData = salesData.sort();
       salesData = salesData.reverse();
       res.json(salesData);
+    });
+
+    // Best Selling/Popular Products
+    app.get("/admin-dashboard/popular-products", async (req, res) => {
+      const products = await productCollection.find({}).toArray();
+
+      let popularProducts = products?.sort((a, b) => b.sold - a.sold);
+
+      // top 10 best selling products
+      popularProducts = popularProducts.slice(0, 10);
+
+      res.send(popularProducts);
+    });
+
+    // Recent Reviews
+    app.get("/admin-dashboard/recent-reviews", async (req, res) => {
+      const reviews = await reviewCollection.find({}).toArray();
+
+      let recentReviews = reviews?.sort(
+        (a, b) => new Date(b.addedAt) - new Date(a.addedAt)
+      );
+
+      res.send(recentReviews?.slice(0, 4));
     });
 
     // Send a ping to confirm a successful connection
