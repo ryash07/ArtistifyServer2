@@ -225,12 +225,19 @@ async function run() {
       res.send(result);
     });
 
+    app.post("/products", async (req, res) => {
+      const body = req.body;
+
+      const result = await productCollection.insertOne(body);
+      res.send(result);
+    });
+
     app.get("/single-product/:id", async (req, res) => {
       const id = req.params.id;
       const filter = { _id: new ObjectId(id) };
 
       const result = await productCollection.findOne(filter);
-      result.review.sort(
+      result?.review?.sort(
         (a, b) => new Date(b.reviewDate) - new Date(a.reviewDate)
       );
 
@@ -334,12 +341,10 @@ async function run() {
       const product = await productCollection.findOne({
         _id: new ObjectId(productId),
       });
-      const review = product?.review?.find(
-        (r) => new ObjectId(r._id) == reviewId
-      );
+      const review = product?.review?.find((r) => r._id == reviewId);
 
       // initialize likeCount and likedBy array
-      if (!review.likeCount) {
+      if (!review?.likeCount) {
         review.likeCount = 0;
       }
       if (!review.likedBy) {
@@ -844,6 +849,16 @@ async function run() {
       );
 
       res.send(updatedCategories);
+    });
+
+    // ADMIN PRODUCTS ROUTE API
+    app.delete("/admin/delete-product/:id", async (req, res) => {
+      const id = req.params.id;
+
+      const result = await productCollection.deleteOne({
+        _id: new ObjectId(id),
+      });
+      res.send(result);
     });
 
     // Send a ping to confirm a successful connection
