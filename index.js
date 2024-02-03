@@ -232,6 +232,17 @@ async function run() {
       res.send(result);
     });
 
+    app.put("/products/:id", async (req, res) => {
+      const id = req.params.id;
+      const updatedDoc = req.body;
+
+      const result = await productCollection.updateOne(
+        { _id: new ObjectId(id) },
+        { $set: updatedDoc }
+      );
+      res.send(result);
+    });
+
     app.get("/single-product/:id", async (req, res) => {
       const id = req.params.id;
       const filter = { _id: new ObjectId(id) };
@@ -571,7 +582,7 @@ async function run() {
 
         await productCollection.updateOne(
           { _id: new ObjectId(productId) },
-          { $inc: { sold: quantity } }
+          { $inc: { sold: quantity, stock: -quantity } }
         );
       }
 
@@ -590,7 +601,7 @@ async function run() {
 
         await productCollection.updateOne(
           { _id: new ObjectId(productId) },
-          { $inc: { sold: -quantity } }
+          { $inc: { sold: -quantity, stock: quantity } }
         );
       }
 
