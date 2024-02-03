@@ -798,7 +798,17 @@ async function run() {
               throw err;
             });
 
-          return { monthName, totalSales: totalSales?.toFixed(2) || 0 };
+          const totalOrders = await orderCollection
+            .find({
+              date: { $gte: startOfMonth, $lte: endOfMonth },
+            })
+            .toArray();
+
+          return {
+            monthName,
+            totalSales: totalSales?.toFixed(2) || 0,
+            totalOrders: totalOrders?.length,
+          };
         })
       );
 
@@ -892,6 +902,77 @@ async function run() {
       );
 
       res.send(result);
+    });
+
+    app.get("/admin/total-spent", async (req, res) => {
+      const pipeline = [
+        {
+          $group: {
+            _id: "$email",
+            totalOrdersCount: { $sum: 1 },
+            totalSpent: { $sum: { $toDouble: "$total" } },
+          },
+        },
+        {
+          $project: {
+            email: "$_id",
+            totalOrdersCount: 1,
+            totalSpent: 1,
+            _id: 0,
+          },
+        },
+      ];
+
+      const result = await orderCollection.aggregate(pipeline).toArray();
+
+      res.send(result);
+    });
+
+    // ADMIN USERS ROUTE API
+    app.get("/admin/users", async (req, res) => {
+      const result = await userCollection.find({}).toArray();
+      res.send(result);
+    });
+
+    app.patch("/admin/users/make-admin/:email", async (req, res) => {
+      const email = req.params.email;
+      const body = req.body;
+
+      const result = await userCollection.updateOne(
+        { email: email },
+        { $set: { admin: body.admin } },
+        { upsert: true }
+      );
+
+      res.send(result);
+    });
+
+    app.delete("/admin/delete-user/:email", async (req, res) => {
+      const userEmail = req.params.email;
+
+      // Collections to cascade delete from
+      const collectionsToCascadeDelete = [
+        "users",
+        "orders",
+        "cart",
+        "wishlist",
+      ];
+
+      const deletePromises = collectionsToCascadeDelete.map(
+        async (collectionName) => {
+          return await ubJewellersDB
+            .collection(collectionName)
+            .deleteMany({ email: userEmail });
+        }
+      );
+
+      const deleteResults = await Promise.all(deletePromises);
+
+      res.status(200).json({
+        deleteResults,
+        success: true,
+        message: `User '${userEmail}' and associated data deleted successfully.`,
+      });
     });
 
     // Send a ping to confirm a successful connection
