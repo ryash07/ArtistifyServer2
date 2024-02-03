@@ -222,6 +222,8 @@ async function run() {
       }
       const result = await productCollection.find({}).toArray();
 
+      result.sort((a, b) => new Date(b.addedAt) - new Date(a.addedAt));
+
       res.send(result);
     });
 
@@ -312,7 +314,7 @@ async function run() {
             product.category.toLowerCase().includes(searchText)
         );
       }
-
+      result.sort((a, b) => new Date(b.addedAt) - new Date(a.addedAt));
       res.send(result);
     });
 
@@ -869,6 +871,26 @@ async function run() {
       const result = await productCollection.deleteOne({
         _id: new ObjectId(id),
       });
+      res.send(result);
+    });
+
+    // ADMIN ORDER ROUTE API
+    app.get("/admin/orders", async (req, res) => {
+      const result = await orderCollection.find({}).toArray();
+      result.sort((a, b) => new Date(b.date) - new Date(a.date));
+      res.send(result);
+    });
+
+    app.patch("/admin/update-order/:orderId", async (req, res) => {
+      const id = req.params.orderId;
+      const body = req.body;
+
+      const result = await orderCollection.updateOne(
+        { _id: new ObjectId(id) },
+        { $set: { orderStatus: body.orderStatus } },
+        { upsert: true }
+      );
+
       res.send(result);
     });
 
