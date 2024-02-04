@@ -28,12 +28,8 @@ const verifyJWT = (req, res, next) => {
 
   jwt.verify(token, process.env.JWT_SECRET_KEY, (err, decoded) => {
     if (err) {
-      return res
-        .status(401)
-        .send({ error: true, message: "unauthorized access" });
+      return res.status(401).send({ error: true, message: err.message });
     }
-
-    console.log("Verify token decoded: ", decoded);
 
     req.decoded = decoded;
     next();
@@ -129,6 +125,8 @@ async function run() {
     app.post("/users", async (req, res) => {
       const user = req.body;
       const userExists = await userCollection.findOne({ email: user?.email });
+
+      console.log(user);
 
       if (userExists) {
         return res.send({ error: true, message: "user already exists" });
