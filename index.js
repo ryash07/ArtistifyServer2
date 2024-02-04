@@ -8,6 +8,7 @@ const CryptoJS = require("crypto-js");
 const { calculateComparingPercentage } = require("./calculatePercentageChange");
 const { formatSalesData } = require("./formatSalesData");
 const stripe = require("stripe")(process.env.PAYMENT_GATEWAY_SECRET_KEY);
+const jwt = require("jsonwebtoken");
 
 // middlewares
 app.use(cors());
@@ -20,7 +21,7 @@ const verifyJWT = (req, res, next) => {
   if (!authorization) {
     return res
       .status(401)
-      .send({ error: true, message: "unauthorized access" });
+      .send({ error: true, message: "Unauthorized Access" });
   }
 
   const token = authorization.split(" ")[1];
@@ -31,6 +32,8 @@ const verifyJWT = (req, res, next) => {
         .status(401)
         .send({ error: true, message: "unauthorized access" });
     }
+
+    console.log("Verify token decoded: ", decoded);
 
     req.decoded = decoded;
     next();
@@ -65,25 +68,39 @@ async function run() {
     const wishlistCollection = ubJewellersDB.collection("wishlist");
     const orderCollection = ubJewellersDB.collection("orders");
 
-    // generate JWT Token related api
+    // GENERATE JWT TOKEN
     app.post("/jwt", async (req, res) => {
       const userEmailObj = req.body;
 
       const token = jwt.sign(userEmailObj, process.env.JWT_SECRET_KEY, {
-        expiresIn: "2h",
+        expiresIn: "1h",
       });
 
-      res.send({ token });
+      res.status(200).send({ token });
     });
 
+    // VERIFY ADMIN MIDDLEWARE
+    const verifyAdmin = async (req, res, next) => {
+      const email = req?.decoded?.email;
+      const user = await userCollection.findOne({ email: email });
+
+      if (!user?.admin) {
+        return res
+          .status(404)
+          .send({ error: true, message: "Forbidden Access" });
+      }
+
+      next();
+    };
+
     // USERS RELATED API
-    app.get("/user", async (req, res) => {
+    app.get("/user", verifyJWT, async (req, res) => {
       const email = req.query.email;
       const result = await userCollection.findOne({ email: email });
       res.send(result);
     });
 
-    app.patch("/update-user", async (req, res) => {
+    app.patch("/update-user", verifyJWT, async (req, res) => {
       const email = req.query.email;
       const { fullName, mobileNumber, dob, gender, location } = req.body;
       const filter = { email: email };
@@ -124,7 +141,7 @@ async function run() {
     });
 
     // add user's addresses
-    app.patch("/users/shipping-address", async (req, res) => {
+    app.patch("/users/shipping-address", verifyJWT, async (req, res) => {
       const email = req.query.email;
       const body = req.body;
       const filter = { email: email };
@@ -146,7 +163,7 @@ async function run() {
     });
 
     // delete user's shipping address
-    app.patch("/users/delete-address", async (req, res) => {
+    app.patch("/users/delete-address", verifyJWT, async (req, res) => {
       const email = req.query.email;
       const filter = { email: email };
       const updatedDoc = {
@@ -227,14 +244,14 @@ async function run() {
       res.send(result);
     });
 
-    app.post("/products", async (req, res) => {
+    app.post("/products", verifyJWT, verifyAdmin, async (req, res) => {
       const body = req.body;
 
       const result = await productCollection.insertOne(body);
       res.send(result);
     });
 
-    app.put("/products/:id", async (req, res) => {
+    app.put("/products/:id", verifyJWT, verifyAdmin, async (req, res) => {
       const id = req.params.id;
       const updatedDoc = req.body;
 
@@ -319,7 +336,7 @@ async function run() {
     });
 
     // add new review to a product
-    app.post("/products/add-review/:id", async (req, res) => {
+    app.post("/products/add-review/:id", verifyJWT, async (req, res) => {
       const id = req.params.id;
       const newReview = req.body;
       const filter = { _id: new ObjectId(id) };
@@ -336,6 +353,7 @@ async function run() {
     // delete review of a user from single product reviews
     app.delete(
       "/products/delete-review/:id/reviewer-email/:email",
+      verifyJWT,
       async (req, res) => {
         const { id, email } = req.params;
         const result = await productCollection.updateOne(
@@ -348,7 +366,7 @@ async function run() {
     );
 
     // update like status of review of a single product
-    app.post("/single-product-like-update", async (req, res) => {
+    app.post("/single-product-like-update", verifyJWT, async (req, res) => {
       const { productId, reviewId, email } = req.body;
 
       const product = await productCollection.findOne({
@@ -401,7 +419,7 @@ async function run() {
       res.send(result);
     });
 
-    app.post("/categories", async (req, res) => {
+    app.post("/categories", verifyJWT, verifyAdmin, async (req, res) => {
       const body = req.body;
       body.createdAt = new Date();
 
@@ -409,7 +427,7 @@ async function run() {
       res.send(result);
     });
 
-    app.patch("/categories/:id", async (req, res) => {
+    app.patch("/categories/:id", verifyJWT, verifyAdmin, async (req, res) => {
       const id = req.params.id;
       const body = req.body;
 
@@ -445,14 +463,14 @@ async function run() {
       result.sort((a, b) => new Date(b.addedAt) - new Date(a.addedAt));
       res.send(result);
     });
-    app.post("/add-review", async (req, res) => {
+    app.post("/add-review", verifyJWT, async (req, res) => {
       const body = req.body;
       body.addedAt = new Date(body.addedAt);
       const result = await reviewCollection.insertOne(body);
       res.send(result);
     });
 
-    app.delete("/delete-review/:email", async (req, res) => {
+    app.delete("/delete-review/:email", verifyJWT, async (req, res) => {
       const email = req.params.email;
 
       const result = await reviewCollection.deleteOne({ email: email });
@@ -460,7 +478,7 @@ async function run() {
     });
 
     // CART RELATED API
-    app.get("/cart", async (req, res) => {
+    app.get("/cart", verifyJWT, async (req, res) => {
       const email = req.query?.email;
       const result = await cartCollection.find({ email: email }).toArray();
 
@@ -468,7 +486,7 @@ async function run() {
       res.send(result);
     });
 
-    app.get("/cart/subtotal", async (req, res) => {
+    app.get("/cart/subtotal", verifyJWT, async (req, res) => {
       const email = req.query.email;
       const cartData = await cartCollection.find({ email: email }).toArray();
 
@@ -481,13 +499,13 @@ async function run() {
       res.send({ subtotal: subtotal.toFixed(2) });
     });
 
-    app.post("/cart", async (req, res) => {
+    app.post("/cart", verifyJWT, async (req, res) => {
       const body = req.body;
       const result = await cartCollection.insertOne(body);
       res.send(result);
     });
 
-    app.patch("/cart/:id", async (req, res) => {
+    app.patch("/cart/:id", verifyAdmin, async (req, res) => {
       const id = req.params.id;
       let quantity = parseInt(req.body.quantity);
       const operation = req.body.operation;
@@ -515,7 +533,7 @@ async function run() {
       res.send(result);
     });
 
-    app.delete("/cart/:id", async (req, res) => {
+    app.delete("/cart/:id", verifyJWT, async (req, res) => {
       const id = req.params.id;
 
       const filter = { _id: new ObjectId(id) };
@@ -523,26 +541,26 @@ async function run() {
       res.send(result);
     });
 
-    app.delete("/delete-cart-items", async (req, res) => {
+    app.delete("/delete-cart-items", verifyJWT, async (req, res) => {
       const email = req.query.email;
       const result = await cartCollection.deleteMany({ email: email });
       res.send(result);
     });
 
     // WISHLIST RELATED API
-    app.get("/wishlist", async (req, res) => {
+    app.get("/wishlist", verifyJWT, async (req, res) => {
       const email = req.query?.email;
       const result = await wishlistCollection.find({ email: email }).toArray();
       res.send(result);
     });
 
-    app.post("/wishlist", async (req, res) => {
+    app.post("/wishlist", verifyJWT, async (req, res) => {
       const body = req.body;
       const result = await wishlistCollection.insertOne(body);
       res.send(result);
     });
 
-    app.delete("/wishlist/:id", async (req, res) => {
+    app.delete("/wishlist/:id", verifyJWT, async (req, res) => {
       const id = req.params.id;
 
       const result = await wishlistCollection.deleteOne({
@@ -552,7 +570,7 @@ async function run() {
     });
 
     // STRIPE PAYMENT RELATED API
-    app.post("/create-payment-intent", async (req, res) => {
+    app.post("/create-payment-intent", verifyJWT, async (req, res) => {
       const { orderPrice } = req.body;
       const amountInCent = parseInt(parseFloat(orderPrice) * 100);
 
@@ -570,7 +588,7 @@ async function run() {
     });
 
     // ORDERS RELATED API
-    app.get("/orders", async (req, res) => {
+    app.get("/orders", verifyJWT, async (req, res) => {
       const email = req.query.email;
       const result = await orderCollection.find({ email: email }).toArray();
 
@@ -579,7 +597,7 @@ async function run() {
       res.send(result);
     });
 
-    app.post("/orders", async (req, res) => {
+    app.post("/orders", verifyJWT, async (req, res) => {
       const orderObj = req.body;
 
       // add date to body
@@ -600,7 +618,7 @@ async function run() {
       res.send(result);
     });
 
-    app.delete("/delete-order/:id", async (req, res) => {
+    app.delete("/delete-order/:id", verifyJWT, async (req, res) => {
       const id = req.params.id;
 
       const orderObj = await orderCollection.findOne({ _id: new ObjectId(id) });
@@ -623,234 +641,260 @@ async function run() {
     });
 
     // ADMIN DASHBOARD RELATED API
-    app.get("/admin-dashboard/stats", async (req, res) => {
-      // Get current month and last month start dates
-      const currentDate = new Date();
-      const currentMonthStart = new Date(
-        currentDate.getFullYear(),
-        currentDate.getMonth(),
-        1
-      );
-      const lastMonthStart = new Date(
-        currentDate.getFullYear(),
-        currentDate.getMonth() - 1,
-        1
-      );
+    app.get(
+      "/admin-dashboard/stats",
+      verifyJWT,
+      verifyAdmin,
+      async (req, res) => {
+        // Get current month and last month start dates
+        const currentDate = new Date();
+        const currentMonthStart = new Date(
+          currentDate.getFullYear(),
+          currentDate.getMonth(),
+          1
+        );
+        const lastMonthStart = new Date(
+          currentDate.getFullYear(),
+          currentDate.getMonth() - 1,
+          1
+        );
 
-      let lastMonth = new Date();
-      lastMonth.setMonth(new Date().getMonth() - 1);
-      lastMonth = lastMonth.toLocaleString("default", { month: "long" });
+        let lastMonth = new Date();
+        lastMonth.setMonth(new Date().getMonth() - 1);
+        lastMonth = lastMonth.toLocaleString("default", { month: "long" });
 
-      // Calculating sales, orders, averageOrder for current month
-      const currentMonthStats = await orderCollection
-        .aggregate([
-          {
-            $match: {
-              date: {
-                $gte: currentMonthStart,
-                $lt: currentDate,
+        // Calculating sales, orders, averageOrder for current month
+        const currentMonthStats = await orderCollection
+          .aggregate([
+            {
+              $match: {
+                date: {
+                  $gte: currentMonthStart,
+                  $lt: currentDate,
+                },
               },
             },
-          },
-          {
-            $group: {
-              _id: null,
-              totalSells: { $sum: { $toDouble: "$total" } },
-              totalOrders: { $sum: 1 },
-              averageOrderValue: { $avg: { $toDouble: "$total" } },
+            {
+              $group: {
+                _id: null,
+                totalSells: { $sum: { $toDouble: "$total" } },
+                totalOrders: { $sum: 1 },
+                averageOrderValue: { $avg: { $toDouble: "$total" } },
+              },
             },
-          },
-        ])
-        .toArray();
+          ])
+          .toArray();
 
-      // calculating values of last month
-      const lastMonthStats = await orderCollection
-        .aggregate([
-          {
-            $match: {
-              date: { $gte: lastMonthStart, $lt: currentMonthStart },
+        // calculating values of last month
+        const lastMonthStats = await orderCollection
+          .aggregate([
+            {
+              $match: {
+                date: { $gte: lastMonthStart, $lt: currentMonthStart },
+              },
             },
-          },
-          {
-            $group: {
-              _id: null,
-              totalSells: { $sum: { $toDouble: "$total" } },
-              totalOrders: { $sum: 1 },
-              averageOrderValue: { $avg: { $toDouble: "$total" } },
+            {
+              $group: {
+                _id: null,
+                totalSells: { $sum: { $toDouble: "$total" } },
+                totalOrders: { $sum: 1 },
+                averageOrderValue: { $avg: { $toDouble: "$total" } },
+              },
             },
+          ])
+          .toArray();
+
+        const currentMonthStatsData = currentMonthStats[0] || {
+          totalSells: 0,
+          totalOrders: 0,
+          averageOrderValue: 0,
+        };
+        const lastMonthStatsData = lastMonthStats[0] || {
+          totalSells: 0,
+          totalOrders: 0,
+          averageOrderValue: 0,
+        };
+
+        // Calculate customers data
+        const newCustomers = await userCollection.countDocuments({
+          createdAt: {
+            $gte: currentMonthStart,
+            $lt: currentDate,
           },
-        ])
-        .toArray();
+        });
 
-      const currentMonthStatsData = currentMonthStats[0] || {
-        totalSells: 0,
-        totalOrders: 0,
-        averageOrderValue: 0,
-      };
-      const lastMonthStatsData = lastMonthStats[0] || {
-        totalSells: 0,
-        totalOrders: 0,
-        averageOrderValue: 0,
-      };
+        const lastMonthCustomers = await userCollection.countDocuments({
+          createdAt: {
+            $gte: lastMonthStart,
+            $lt: currentMonthStart,
+          },
+        });
 
-      // Calculate customers data
-      const newCustomers = await userCollection.countDocuments({
-        createdAt: {
-          $gte: currentMonthStart,
-          $lt: currentDate,
-        },
-      });
+        const customerStatsData = { newCustomers, lastMonthCustomers };
 
-      const lastMonthCustomers = await userCollection.countDocuments({
-        createdAt: {
-          $gte: lastMonthStart,
-          $lt: currentMonthStart,
-        },
-      });
+        const response = {
+          currentMonthStatsData,
+          lastMonthStatsData: {
+            ...lastMonthStatsData,
+            lastMonth,
+            year: lastMonthStart.getFullYear(),
+          },
 
-      const customerStatsData = { newCustomers, lastMonthCustomers };
+          customerStatsData,
 
-      const response = {
-        currentMonthStatsData,
-        lastMonthStatsData: {
-          ...lastMonthStatsData,
-          lastMonth,
-          year: lastMonthStart.getFullYear(),
-        },
+          lastMonthComparisonPercentage: {
+            totalSellsPercentage: calculateComparingPercentage(
+              currentMonthStatsData?.totalSells,
+              lastMonthStatsData?.totalSells
+            ),
+            totalOrdersPercentage: calculateComparingPercentage(
+              currentMonthStatsData.totalOrders,
+              lastMonthStatsData.totalOrders
+            ),
+            averageOrderValuePercentage: calculateComparingPercentage(
+              currentMonthStatsData.averageOrderValue,
+              lastMonthStatsData.averageOrderValue
+            ),
+            customersPercentage: calculateComparingPercentage(
+              customerStatsData.newCustomers,
+              customerStatsData.lastMonthCustomers
+            ),
+          },
+        };
 
-        customerStatsData,
+        res.send(response);
+      }
+    );
 
-        lastMonthComparisonPercentage: {
-          totalSellsPercentage: calculateComparingPercentage(
-            currentMonthStatsData?.totalSells,
-            lastMonthStatsData?.totalSells
-          ),
-          totalOrdersPercentage: calculateComparingPercentage(
-            currentMonthStatsData.totalOrders,
-            lastMonthStatsData.totalOrders
-          ),
-          averageOrderValuePercentage: calculateComparingPercentage(
-            currentMonthStatsData.averageOrderValue,
-            lastMonthStatsData.averageOrderValue
-          ),
-          customersPercentage: calculateComparingPercentage(
-            customerStatsData.newCustomers,
-            customerStatsData.lastMonthCustomers
-          ),
-        },
-      };
+    app.get(
+      "/admin-dashboard/top-selling-categories",
+      verifyJWT,
+      verifyAdmin,
+      async (req, res) => {
+        // total number of categories
+        const totalCategories =
+          await categoryCollection.estimatedDocumentCount();
 
-      res.send(response);
-    });
-
-    app.get("/admin-dashboard/top-selling-categories", async (req, res) => {
-      // total number of categories
-      const totalCategories = await categoryCollection.estimatedDocumentCount();
-
-      // find top sold categories
-      const result = await productCollection
-        .aggregate([
-          {
-            $group: {
-              _id: "$category",
-              totalSold: { $sum: "$sold" },
+        // find top sold categories
+        const result = await productCollection
+          .aggregate([
+            {
+              $group: {
+                _id: "$category",
+                totalSold: { $sum: "$sold" },
+              },
             },
-          },
-          {
-            $sort: { totalSold: -1 },
-          },
-          {
-            $limit: 6,
-          },
-        ])
-        .toArray();
+            {
+              $sort: { totalSold: -1 },
+            },
+            {
+              $limit: 6,
+            },
+          ])
+          .toArray();
 
-      res.send({ totalCategories, topCategories: result });
-    });
+        res.send({ totalCategories, topCategories: result });
+      }
+    );
 
     // Income Statistics data for last 5 and current month
-    app.get("/admin-dashboard/income-stats", async (req, res) => {
-      const currentDate = new Date();
-      const currentMonth = currentDate.getMonth() + 1;
+    app.get(
+      "/admin-dashboard/income-stats",
+      verifyJWT,
+      verifyAdmin,
+      async (req, res) => {
+        const currentDate = new Date();
+        const currentMonth = currentDate.getMonth() + 1;
 
-      // Calculate sales for the last 5 months and the current month
-      let salesData = await Promise.all(
-        Array.from({ length: 6 }).map(async (_, index) => {
-          const month = currentMonth - index;
-          const monthName = new Date(2000, month - 1, 1).toLocaleString(
-            "en-US",
-            { month: "long" }
-          );
+        // Calculate sales for the last 5 months and the current month
+        let salesData = await Promise.all(
+          Array.from({ length: 6 }).map(async (_, index) => {
+            const month = currentMonth - index;
+            const monthName = new Date(2000, month - 1, 1).toLocaleString(
+              "en-US",
+              { month: "long" }
+            );
 
-          const startOfMonth = new Date(
-            currentDate.getFullYear(),
-            month - 1,
-            1
-          );
-          const endOfMonth = new Date(
-            currentDate.getFullYear(),
-            month,
-            0,
-            23,
-            59,
-            59,
-            999
-          );
+            const startOfMonth = new Date(
+              currentDate.getFullYear(),
+              month - 1,
+              1
+            );
+            const endOfMonth = new Date(
+              currentDate.getFullYear(),
+              month,
+              0,
+              23,
+              59,
+              59,
+              999
+            );
 
-          const totalSales = await orderCollection
-            .find({ date: { $gte: startOfMonth, $lte: endOfMonth } })
-            .toArray()
-            .then((orders) =>
-              orders.reduce((acc, order) => acc + parseFloat(order.total), 0)
-            )
-            .catch((err) => {
-              throw err;
-            });
+            const totalSales = await orderCollection
+              .find({ date: { $gte: startOfMonth, $lte: endOfMonth } })
+              .toArray()
+              .then((orders) =>
+                orders.reduce((acc, order) => acc + parseFloat(order.total), 0)
+              )
+              .catch((err) => {
+                throw err;
+              });
 
-          const totalOrders = await orderCollection
-            .find({
-              date: { $gte: startOfMonth, $lte: endOfMonth },
-            })
-            .toArray();
+            const totalOrders = await orderCollection
+              .find({
+                date: { $gte: startOfMonth, $lte: endOfMonth },
+              })
+              .toArray();
 
-          return {
-            monthName,
-            totalSales: totalSales?.toFixed(2) || 0,
-            totalOrders: totalOrders?.length,
-          };
-        })
-      );
+            return {
+              monthName,
+              totalSales: totalSales?.toFixed(2) || 0,
+              totalOrders: totalOrders?.length,
+            };
+          })
+        );
 
-      salesData = salesData.sort();
-      salesData = salesData.reverse();
-      res.json(salesData);
-    });
+        salesData = salesData.sort();
+        salesData = salesData.reverse();
+        res.json(salesData);
+      }
+    );
 
     // Best Selling/Popular Products
-    app.get("/admin-dashboard/popular-products", async (req, res) => {
-      const products = await productCollection.find({}).toArray();
+    app.get(
+      "/admin-dashboard/popular-products",
+      verifyJWT,
+      verifyAdmin,
+      async (req, res) => {
+        const products = await productCollection.find({}).toArray();
 
-      let popularProducts = products?.sort((a, b) => b.sold - a.sold);
+        let popularProducts = products?.sort((a, b) => b.sold - a.sold);
 
-      // top 10 best selling products
-      popularProducts = popularProducts.slice(0, 10);
+        // top 10 best selling products
+        popularProducts = popularProducts.slice(0, 10);
 
-      res.send(popularProducts);
-    });
+        res.send(popularProducts);
+      }
+    );
 
     // Recent Reviews
-    app.get("/admin-dashboard/recent-reviews", async (req, res) => {
-      const reviews = await reviewCollection.find({}).toArray();
+    app.get(
+      "/admin-dashboard/recent-reviews",
+      verifyJWT,
+      verifyAdmin,
+      async (req, res) => {
+        const reviews = await reviewCollection.find({}).toArray();
 
-      let recentReviews = reviews?.sort(
-        (a, b) => new Date(b.addedAt) - new Date(a.addedAt)
-      );
+        let recentReviews = reviews?.sort(
+          (a, b) => new Date(b.addedAt) - new Date(a.addedAt)
+        );
 
-      res.send(recentReviews?.slice(0, 4));
-    });
+        res.send(recentReviews?.slice(0, 4));
+      }
+    );
 
     // ADMIN CATEGORIES ROUTE API
-    app.get("/admin/categories", async (req, res) => {
+    app.get("/admin/categories", verifyJWT, verifyAdmin, async (req, res) => {
       const products = await productCollection.find({}).toArray();
       const categories = await categoryCollection.find({}).toArray();
       let updatedCategories = categories?.map((c) => {
@@ -884,36 +928,46 @@ async function run() {
     });
 
     // ADMIN PRODUCTS ROUTE API
-    app.delete("/admin/delete-product/:id", async (req, res) => {
-      const id = req.params.id;
+    app.delete(
+      "/admin/delete-product/:id",
+      verifyJWT,
+      verifyAdmin,
+      async (req, res) => {
+        const id = req.params.id;
 
-      const result = await productCollection.deleteOne({
-        _id: new ObjectId(id),
-      });
-      res.send(result);
-    });
+        const result = await productCollection.deleteOne({
+          _id: new ObjectId(id),
+        });
+        res.send(result);
+      }
+    );
 
     // ADMIN ORDER ROUTE API
-    app.get("/admin/orders", async (req, res) => {
+    app.get("/admin/orders", verifyJWT, verifyAdmin, async (req, res) => {
       const result = await orderCollection.find({}).toArray();
       result.sort((a, b) => new Date(b.date) - new Date(a.date));
       res.send(result);
     });
 
-    app.patch("/admin/update-order/:orderId", async (req, res) => {
-      const id = req.params.orderId;
-      const body = req.body;
+    app.patch(
+      "/admin/update-order/:orderId",
+      verifyJWT,
+      verifyAdmin,
+      async (req, res) => {
+        const id = req.params.orderId;
+        const body = req.body;
 
-      const result = await orderCollection.updateOne(
-        { _id: new ObjectId(id) },
-        { $set: { orderStatus: body.orderStatus } },
-        { upsert: true }
-      );
+        const result = await orderCollection.updateOne(
+          { _id: new ObjectId(id) },
+          { $set: { orderStatus: body.orderStatus } },
+          { upsert: true }
+        );
 
-      res.send(result);
-    });
+        res.send(result);
+      }
+    );
 
-    app.get("/admin/total-spent", async (req, res) => {
+    app.get("/admin/total-spent", verifyJWT, verifyAdmin, async (req, res) => {
       const pipeline = [
         {
           $group: {
@@ -938,51 +992,61 @@ async function run() {
     });
 
     // ADMIN USERS ROUTE API
-    app.get("/admin/users", async (req, res) => {
+    app.get("/admin/users", verifyJWT, verifyAdmin, async (req, res) => {
       const result = await userCollection.find({}).toArray();
       res.send(result);
     });
 
-    app.patch("/admin/users/make-admin/:email", async (req, res) => {
-      const email = req.params.email;
-      const body = req.body;
+    app.patch(
+      "/admin/users/make-admin/:email",
+      verifyJWT,
+      verifyAdmin,
+      async (req, res) => {
+        const email = req.params.email;
+        const body = req.body;
 
-      const result = await userCollection.updateOne(
-        { email: email },
-        { $set: { admin: body.admin } },
-        { upsert: true }
-      );
+        const result = await userCollection.updateOne(
+          { email: email },
+          { $set: { admin: body.admin } },
+          { upsert: true }
+        );
 
-      res.send(result);
-    });
+        res.send(result);
+      }
+    );
 
-    app.delete("/admin/delete-user/:email", async (req, res) => {
-      const userEmail = req.params.email;
+    app.delete(
+      "/admin/delete-user/:email",
+      verifyJWT,
+      verifyAdmin,
+      async (req, res) => {
+        const userEmail = req.params.email;
 
-      // Collections to cascade delete from
-      const collectionsToCascadeDelete = [
-        "users",
-        "orders",
-        "cart",
-        "wishlist",
-      ];
+        // Collections to cascade delete from
+        const collectionsToCascadeDelete = [
+          "users",
+          "orders",
+          "cart",
+          "wishlist",
+        ];
 
-      const deletePromises = collectionsToCascadeDelete.map(
-        async (collectionName) => {
-          return await ubJewellersDB
-            .collection(collectionName)
-            .deleteMany({ email: userEmail });
-        }
-      );
+        const deletePromises = collectionsToCascadeDelete.map(
+          async (collectionName) => {
+            return await ubJewellersDB
+              .collection(collectionName)
+              .deleteMany({ email: userEmail });
+          }
+        );
 
-      const deleteResults = await Promise.all(deletePromises);
+        const deleteResults = await Promise.all(deletePromises);
 
-      res.status(200).json({
-        deleteResults,
-        success: true,
-        message: `User '${userEmail}' and associated data deleted successfully.`,
-      });
-    });
+        res.status(200).json({
+          deleteResults,
+          success: true,
+          message: `User '${userEmail}' and associated data deleted successfully.`,
+        });
+      }
+    );
 
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
