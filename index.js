@@ -297,15 +297,17 @@ async function run() {
 
       // filter by price
       result = result.filter(
-        (product) => product.price >= minPrice && product.price <= maxPrice
+        (product) =>
+          parseFloat(product.price) >= minPrice &&
+          parseFloat(product.price) <= maxPrice
       );
 
       // sort by price
       if (priceSortOrder !== "all") {
         result.sort((a, b) => {
           return priceSortOrder === "asc"
-            ? a.price - b.price // ascending order
-            : b.price - a.price; // descending order?
+            ? parseFloat(a.price) - parseFloat(b.price) // ascending order
+            : parseFloat(b.price) - parseFloat(a.price); // descending order?
         });
       }
 
@@ -329,7 +331,10 @@ async function run() {
             product.category.toLowerCase().includes(searchText)
         );
       }
-      result.sort((a, b) => new Date(b.addedAt) - new Date(a.addedAt));
+
+      if (priceSortOrder === "all") {
+        result.sort((a, b) => new Date(b.addedAt) - new Date(a.addedAt));
+      }
       res.send(result);
     });
 
