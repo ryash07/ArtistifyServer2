@@ -17,9 +17,6 @@ app.use(express.json());
 // Verify JWT Token Middleware
 const verifyJWT = (req, res, next) => {
   const authorization = req.headers.authorization;
-
-  console.log(authorization);
-
   if (!authorization) {
     return res
       .status(401)
