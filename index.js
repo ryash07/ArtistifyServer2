@@ -18,6 +18,8 @@ app.use(express.json());
 const verifyJWT = (req, res, next) => {
   const authorization = req.headers.authorization;
 
+  console.log(authorization);
+
   if (!authorization) {
     return res
       .status(401)
@@ -125,8 +127,6 @@ async function run() {
     app.post("/users", async (req, res) => {
       const user = req.body;
       const userExists = await userCollection.findOne({ email: user?.email });
-
-      console.log(user);
 
       if (userExists) {
         return res.send({ error: true, message: "user already exists" });
