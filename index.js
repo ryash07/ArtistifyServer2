@@ -994,6 +994,7 @@ async function run() {
     // ADMIN USERS ROUTE API
     app.get("/admin/users", verifyJWT, verifyAdmin, async (req, res) => {
       const result = await userCollection.find({}).toArray();
+      result.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
       res.send(result);
     });
 
