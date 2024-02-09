@@ -505,7 +505,7 @@ async function run() {
       res.send(result);
     });
 
-    app.patch("/cart/:id", verifyAdmin, async (req, res) => {
+    app.patch("/cart/:id", verifyJWT, async (req, res) => {
       const id = req.params.id;
       let quantity = parseInt(req.body.quantity);
       const operation = req.body.operation;
