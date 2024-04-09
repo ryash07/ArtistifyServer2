@@ -7,7 +7,7 @@ require("dotenv").config();
 const CryptoJS = require("crypto-js");
 const { calculateComparingPercentage } = require("./calculatePercentageChange");
 const { formatSalesData } = require("./formatSalesData");
-const stripe = require("stripe")(process.env.PAYMENT_GATEWAY_SECRET_KEY);
+// const stripe = require("stripe")(process.env.PAYMENT_GATEWAY_SECRET_KEY);
 const jwt = require("jsonwebtoken");
 const cloudinary = require("cloudinary").v2;
 
@@ -44,7 +44,8 @@ cloudinary.config({
 });
 
 // MongoDB Connection
-const uri = `mongodb+srv://${process.env.DATABASE_USER}:${process.env.DATABASE_PASS}@cluster0.5732rtt.mongodb.net/?retryWrites=true&w=majority`;
+// const uri = `mongodb+srv://${process.env.DATABASE_USER}:${process.env.DATABASE_PASS}@cluster0.5732rtt.mongodb.net/?retryWrites=true&w=majority`;
+const uri = 'mongodb://127.0.0.1/';
 
 // Create a MongoClient with a MongoClientOptions object to set the Stable API version
 const client = new MongoClient(uri, {
@@ -600,22 +601,22 @@ async function run() {
     });
 
     // STRIPE PAYMENT RELATED API
-    app.post("/create-payment-intent", verifyJWT, async (req, res) => {
-      const { orderPrice } = req.body;
-      const amountInCent = parseInt(parseFloat(orderPrice) * 100);
+    // app.post("/create-payment-intent", verifyJWT, async (req, res) => {
+    //   const { orderPrice } = req.body;
+    //   const amountInCent = parseInt(parseFloat(orderPrice) * 100);
 
-      const paymentIntent = await stripe.paymentIntents.create({
-        amount: amountInCent,
-        currency: "usd",
-        automatic_payment_methods: {
-          enabled: true,
-        },
-      });
+    //   const paymentIntent = await stripe.paymentIntents.create({
+    //     amount: amountInCent,
+    //     currency: "usd",
+    //     automatic_payment_methods: {
+    //       enabled: true,
+    //     },
+    //   });
 
-      res.send({
-        clientSecret: paymentIntent.client_secret,
-      });
-    });
+    //   res.send({
+    //     clientSecret: paymentIntent.client_secret,
+    //   });
+    // });
 
     // ORDERS RELATED API
     app.get("/orders", verifyJWT, async (req, res) => {
@@ -1092,9 +1093,9 @@ async function run() {
 run().catch(console.dir);
 
 app.get("/", (req, res) => {
-  res.send("UB-Jewellers Server is up and running!");
+  res.send("Artistify Server is up and running!");
 });
 
 app.listen(port, () => {
-  console.log("ub-jewellers server is running on port:", port);
+  console.log("artistify server is running on port:", port);
 });
