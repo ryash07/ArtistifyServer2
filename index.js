@@ -61,7 +61,7 @@ async function run() {
     // Connect the client to the server	(optional starting in v4.7)
     await client.connect();
 
-    const ubJewellersDB = client.db("ubJewellersDB");
+    const ubJewellersDB = client.db("artistifyDB");
     const userCollection = ubJewellersDB.collection("users");
     const productCollection = ubJewellersDB.collection("products");
     const reviewCollection = ubJewellersDB.collection("reviews");
