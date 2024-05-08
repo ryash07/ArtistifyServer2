@@ -7,7 +7,7 @@ require("dotenv").config();
 const CryptoJS = require("crypto-js");
 const { calculateComparingPercentage } = require("./calculatePercentageChange");
 const { formatSalesData } = require("./formatSalesData");
-// const stripe = require("stripe")(process.env.PAYMENT_GATEWAY_SECRET_KEY);
+const stripe = require("stripe")(process.env.PAYMENT_GATEWAY_SECRET_KEY);
 const jwt = require("jsonwebtoken");
 const cloudinary = require("cloudinary").v2;
 
@@ -601,22 +601,22 @@ async function run() {
     });
 
     // STRIPE PAYMENT RELATED API
-    // app.post("/create-payment-intent", verifyJWT, async (req, res) => {
-    //   const { orderPrice } = req.body;
-    //   const amountInCent = parseInt(parseFloat(orderPrice) * 100);
+    app.post("/create-payment-intent", verifyJWT, async (req, res) => {
+      const { orderPrice } = req.body;
+      const amountInCent = parseInt(parseFloat(orderPrice) * 100);
 
-    //   const paymentIntent = await stripe.paymentIntents.create({
-    //     amount: amountInCent,
-    //     currency: "usd",
-    //     automatic_payment_methods: {
-    //       enabled: true,
-    //     },
-    //   });
+      const paymentIntent = await stripe.paymentIntents.create({
+        amount: amountInCent,
+        currency: "usd",
+        automatic_payment_methods: {
+          enabled: true,
+        },
+      });
 
-    //   res.send({
-    //     clientSecret: paymentIntent.client_secret,
-    //   });
-    // });
+      res.send({
+        clientSecret: paymentIntent.client_secret,
+      });
+    });
 
     // ORDERS RELATED API
     app.get("/orders", verifyJWT, async (req, res) => {
