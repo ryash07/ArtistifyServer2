@@ -285,6 +285,7 @@ async function run() {
         { _id: new ObjectId(id) },
         { $set: updatedDoc }
       );
+      console.log(result);
       res.send(result);
     });
 
