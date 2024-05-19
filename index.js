@@ -63,14 +63,18 @@ async function run() {
 
     const ubJewellersDB = client.db("artistifyDB");
     const userCollection = ubJewellersDB.collection("users");
+    // const userCollection2 = ubJewellersDB.collection("sellerUser");
     const productCollection = ubJewellersDB.collection("products");
+    const productCollection2 = ubJewellersDB.collection("sellerProducts");
     const reviewCollection = ubJewellersDB.collection("reviews");
     const navNotificationCollection =
       ubJewellersDB.collection("navNotifications");
     const categoryCollection = ubJewellersDB.collection("categories");
+    const categoryCollection2 = ubJewellersDB.collection("sellerCategories");
     const cartCollection = ubJewellersDB.collection("cart");
     const wishlistCollection = ubJewellersDB.collection("wishlist");
     const orderCollection = ubJewellersDB.collection("orders");
+    const orderCollection2 = ubJewellersDB.collection("sellerOrders");
 
     // GENERATE JWT TOKEN
     app.post("/jwt", async (req, res) => {
@@ -89,6 +93,20 @@ async function run() {
       const user = await userCollection.findOne({ email: email });
 
       if (!user?.admin) {
+        return res
+          .status(404)
+          .send({ error: true, message: "Forbidden Access" });
+      }
+
+      next();
+    };
+
+    // VERIFY SELLER MIDDLEWARE
+    const verifySeller = async (req, res, next) => {
+      const email = req?.decoded?.email;
+      const user = await userCollection.findOne({ email: email });
+
+      if (!user?.seller) {
         return res
           .status(404)
           .send({ error: true, message: "Forbidden Access" });
@@ -270,6 +288,34 @@ async function run() {
       res.send(result);
     });
 
+     // PRODUCTS RELATED API OF SELLER
+     app.get("/products/seller", async (req, res) => {
+      // search  query
+      const productSearchText = req.query?.searchText;
+
+      if (productSearchText === "") {
+        return res.send([]);
+      }
+
+      if (productSearchText) {
+        const result = await productCollection2
+          .find({
+            $or: [
+              { name: { $regex: productSearchText, $options: "i" } },
+              { category: { $regex: productSearchText, $options: "i" } },
+            ],
+          })
+          .toArray();
+        return res.send(result);
+      }
+      const result = await productCollection2.find({}).toArray();
+
+      result.sort((a, b) => new Date(b.addedAt) - new Date(a.addedAt));
+
+      res.send(result);
+    });
+
+    // ADMIN PRODUCT POST API
     app.post("/products", verifyJWT, verifyAdmin, async (req, res) => {
       const body = req.body;
 
@@ -277,6 +323,15 @@ async function run() {
       res.send(result);
     });
 
+     // PRODUCT POST API OF SELLER
+     app.post("/products/seller", verifyJWT, async (req, res) => {
+      const body = req.body;
+
+      const result = await productCollection2.insertOne(body);
+      res.send(result);
+    });
+
+    // ADMIN PRODUCTS API WITH ID
     app.put("/products/:id", verifyJWT, verifyAdmin, async (req, res) => {
       const id = req.params.id;
       const updatedDoc = req.body;
@@ -285,19 +340,28 @@ async function run() {
         { _id: new ObjectId(id) },
         { $set: updatedDoc }
       );
-      console.log(result);
+      res.send(result);
+    });
+
+    // PRODUCTS API WITH ID OF SELLER
+    app.put("/products/seller/:id", verifyJWT, async (req, res) => {
+      const id = req.params.id;
+      const updatedDoc = req.body;
+
+      const result = await productCollection2.updateOne(
+        { _id: new ObjectId(id) },
+        { $set: updatedDoc }
+      );
       res.send(result);
     });
 
     app.get("/single-product/:id", async (req, res) => {
       const id = req.params.id;
-      const filter = { _id: new ObjectId(id) };
-
+      const filter = { _id: id };
       const result = await productCollection.findOne(filter);
       result?.review?.sort(
         (a, b) => new Date(b.reviewDate) - new Date(a.reviewDate)
       );
-
       res.send(result);
     });
 
@@ -309,7 +373,7 @@ async function run() {
         parseFloat(req.query?.maxPrice) || Number.POSITIVE_INFINITY;
       let priceSortOrder = req.query?.priceOrder || "all";
       const size = req.query?.size?.toLowerCase() || "all";
-      const carate = parseInt(req.query?.carate) || "all";
+      // const carate = parseInt(req.query?.carate) || "all";
       const searchText = req.query?.search?.toLowerCase() || "";
 
       let result;
@@ -348,9 +412,9 @@ async function run() {
       }
 
       // filter by carate
-      if (carate !== "all") {
-        result = result.filter((product) => product.carate === carate);
-      }
+      // if (carate !== "all") {
+      //   result = result.filter((product) => product.carate === carate);
+      // }
 
       // filter by search
       if (searchText !== "") {
@@ -371,7 +435,7 @@ async function run() {
     app.post("/products/add-review/:id", verifyJWT, async (req, res) => {
       const id = req.params.id;
       const newReview = req.body;
-      const filter = { _id: new ObjectId(id) };
+      const filter = { _id: id };
 
       newReview.reviewDate = new Date();
 
@@ -389,7 +453,7 @@ async function run() {
       async (req, res) => {
         const { id, email } = req.params;
         const result = await productCollection.updateOne(
-          { _id: new ObjectId(id) },
+          { _id: id },
           { $pull: { review: { reviewerEmail: email } } }
         );
 
@@ -402,7 +466,7 @@ async function run() {
       const { productId, reviewId, email } = req.body;
 
       const product = await productCollection.findOne({
-        _id: new ObjectId(productId),
+        _id: productId,
       });
       const review = product?.review?.find((r) => r._id == reviewId);
 
@@ -798,6 +862,132 @@ async function run() {
       }
     );
 
+     // SELLER DASHBOARD RELATED API
+    app.get(
+      "/seller-dashboard/stats",
+      verifyJWT,
+      verifySeller,
+      async (req, res) => {
+        // Get current month and last month start dates
+        const currentDate = new Date();
+        const currentMonthStart = new Date(
+          currentDate.getFullYear(),
+          currentDate.getMonth(),
+          1
+        );
+        const lastMonthStart = new Date(
+          currentDate.getFullYear(),
+          currentDate.getMonth() - 1,
+          1
+        );
+
+        let lastMonth = new Date();
+        lastMonth.setMonth(new Date().getMonth() - 1);
+        lastMonth = lastMonth.toLocaleString("default", { month: "long" });
+
+        // Calculating sales, orders, averageOrder for current month
+        const currentMonthStats = await orderCollection2
+          .aggregate([
+            {
+              $match: {
+                date: {
+                  $gte: currentMonthStart,
+                  $lt: currentDate,
+                },
+              },
+            },
+            {
+              $group: {
+                _id: null,
+                totalSells: { $sum: { $toDouble: "$total" } },
+                totalOrders: { $sum: 1 },
+                averageOrderValue: { $avg: { $toDouble: "$total" } },
+              },
+            },
+          ])
+          .toArray();
+
+        // calculating values of last month
+        const lastMonthStats = await orderCollection2
+          .aggregate([
+            {
+              $match: {
+                date: { $gte: lastMonthStart, $lt: currentMonthStart },
+              },
+            },
+            {
+              $group: {
+                _id: null,
+                totalSells: { $sum: { $toDouble: "$total" } },
+                totalOrders: { $sum: 1 },
+                averageOrderValue: { $avg: { $toDouble: "$total" } },
+              },
+            },
+          ])
+          .toArray();
+
+        const currentMonthStatsData = currentMonthStats[0] || {
+          totalSells: 0,
+          totalOrders: 0,
+          averageOrderValue: 0,
+        };
+        const lastMonthStatsData = lastMonthStats[0] || {
+          totalSells: 0,
+          totalOrders: 0,
+          averageOrderValue: 0,
+        };
+
+        // Calculate customers data
+        const newCustomers = await userCollection.countDocuments({
+          createdAt: {
+            $gte: currentMonthStart,
+            $lt: currentDate,
+          },
+        });
+
+        const lastMonthCustomers = await userCollection.countDocuments({
+          createdAt: {
+            $gte: lastMonthStart,
+            $lt: currentMonthStart,
+          },
+        });
+
+        const customerStatsData = { newCustomers, lastMonthCustomers };
+
+        const response = {
+          currentMonthStatsData,
+          lastMonthStatsData: {
+            ...lastMonthStatsData,
+            lastMonth,
+            year: lastMonthStart.getFullYear(),
+          },
+
+          customerStatsData,
+
+          lastMonthComparisonPercentage: {
+            totalSellsPercentage: calculateComparingPercentage(
+              currentMonthStatsData?.totalSells,
+              lastMonthStatsData?.totalSells
+            ),
+            totalOrdersPercentage: calculateComparingPercentage(
+              currentMonthStatsData.totalOrders,
+              lastMonthStatsData.totalOrders
+            ),
+            averageOrderValuePercentage: calculateComparingPercentage(
+              currentMonthStatsData.averageOrderValue,
+              lastMonthStatsData.averageOrderValue
+            ),
+            customersPercentage: calculateComparingPercentage(
+              customerStatsData.newCustomers,
+              customerStatsData.lastMonthCustomers
+            ),
+          },
+        };
+
+        res.send(response);
+      }
+    );
+
     app.get(
       "/admin-dashboard/top-selling-categories",
       verifyJWT,
@@ -809,6 +999,37 @@ async function run() {
 
         // find top sold categories
         const result = await productCollection
+          .aggregate([
+            {
+              $group: {
+                _id: "$category",
+                totalSold: { $sum: "$sold" },
+              },
+            },
+            {
+              $sort: { totalSold: -1 },
+            },
+            {
+              $limit: 6,
+            },
+          ])
+          .toArray();
+
+        res.send({ totalCategories, topCategories: result });
+      }
+    );
+
+    app.get(
+      "/seller-dashboard/top-selling-categories",
+      verifyJWT,
+      verifySeller,
+      async (req, res) => {
+        // total number of categories
+        const totalCategories =
+          await categoryCollection2.estimatedDocumentCount();
+
+        // find top sold categories
+        const result = await productCollection2
           .aggregate([
             {
               $group: {
@@ -892,6 +1113,69 @@ async function run() {
       }
     );
 
+    // Seller Income Statistics data for last 5 and current month 
+    app.get(
+      "/seller-dashboard/income-stats",
+      verifyJWT,
+      // verifySeller,
+      async (req, res) => {
+        const currentDate = new Date();
+        const currentMonth = currentDate.getMonth() + 1;
+
+        // Calculate sales for the last 5 months and the current month
+        let salesData = await Promise.all(
+          Array.from({ length: 6 }).map(async (_, index) => {
+            const month = currentMonth - index;
+            const monthName = new Date(2000, month - 1, 1).toLocaleString(
+              "en-US",
+              { month: "long" }
+            );
+
+            const startOfMonth = new Date(
+              currentDate.getFullYear(),
+              month - 1,
+              1
+            );
+            const endOfMonth = new Date(
+              currentDate.getFullYear(),
+              month,
+              0,
+              23,
+              59,
+              59,
+              999
+            );
+
+            const totalSales = await orderCollection2
+              .find({ date: { $gte: startOfMonth, $lte: endOfMonth } })
+              .toArray()
+              .then((orders) =>
+                orders.reduce((acc, order) => acc + parseFloat(order.total), 0)
+              )
+              .catch((err) => {
+                throw err;
+              });
+
+            const totalOrders = await orderCollection2
+              .find({
+                date: { $gte: startOfMonth, $lte: endOfMonth },
+              })
+              .toArray();
+
+            return {
+              monthName,
+              totalSales: totalSales?.toFixed(2) || 0,
+              totalOrders: totalOrders?.length,
+            };
+          })
+        );
+
+        salesData = salesData.sort();
+        salesData = salesData.reverse();
+        res.json(salesData);
+      }
+    );
+
     // Best Selling/Popular Products
     app.get(
       "/admin-dashboard/popular-products",
@@ -899,6 +1183,23 @@ async function run() {
       verifyAdmin,
       async (req, res) => {
         const products = await productCollection.find({}).toArray();
+
+        let popularProducts = products?.sort((a, b) => b.sold - a.sold);
+
+        // top 10 best selling products
+        popularProducts = popularProducts.slice(0, 10);
+
+        res.send(popularProducts);
+      }
+    );
+
+    // Best Selling/Popular Products Seller
+    app.get(
+      "/seller-dashboard/popular-products",
+      verifyJWT,
+      // verifySeller,
+      async (req, res) => {
+        const products = await productCollection2.find({}).toArray();
 
         let popularProducts = products?.sort((a, b) => b.sold - a.sold);
 
