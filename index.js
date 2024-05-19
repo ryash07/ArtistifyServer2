@@ -12,7 +12,11 @@ const jwt = require("jsonwebtoken");
 const cloudinary = require("cloudinary").v2;
 
 // middlewares
-app.use(cors());
+app.use(cors({
+    origin: ["https://artistify-omega.vercel.app/"],
+    methods: ["GET","POST","PUT","DELETE"],
+    credentials:true
+}));
 app.use(express.json({ limit: "200mb" }));
 
 // Verify JWT Token Middleware
@@ -45,7 +49,7 @@ cloudinary.config({
 
 // MongoDB Connection
 // const uri = `mongodb+srv://${process.env.DATABASE_USER}:${process.env.DATABASE_PASS}@cluster0.5732rtt.mongodb.net/?retryWrites=true&w=majority`;
-const uri = 'mongodb://127.0.0.1/';
+const uri = 'mongodb+srv://yrs:Pass%40123@artistify.durrmc7.mongodb.net/';
 
 // Create a MongoClient with a MongoClientOptions object to set the Stable API version
 const client = new MongoClient(uri, {
