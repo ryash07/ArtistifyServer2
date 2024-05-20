@@ -13,7 +13,7 @@ const cloudinary = require("cloudinary").v2;
 
 // middlewares
 app.use(cors({
-    origin: "https://artistify-omega.vercel.app/",
+    origin: ["https://artistify-omega.vercel.app"],
     methods: ["GET","POST","PUT","DELETE"],
     credentials:true
 }));
