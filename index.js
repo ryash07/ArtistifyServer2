@@ -13,10 +13,12 @@ const cloudinary = require("cloudinary").v2;
 
 // middlewares
 app.use(cors({
-    origin: ["https://artistify-omega.vercel.app"],
-    methods: ["GET","POST","PUT","DELETE"],
-    credentials:true
+  methods: ["GET", "POST", "PUT", "DELETE"],
+  credentials: true // If you need to support cookies or HTTP authentication
 }));
+
+app.options('*', cors());
+
 app.use(express.json({ limit: "200mb" }));
 
 // Verify JWT Token Middleware
