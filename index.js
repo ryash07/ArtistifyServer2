@@ -17,8 +17,6 @@ app.use(cors({
   credentials: true // If you need to support cookies or HTTP authentication
 }));
 
-app.options('*', cors());
-
 app.use(express.json({ limit: "200mb" }));
 
 // Verify JWT Token Middleware
