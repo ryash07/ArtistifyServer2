@@ -12,11 +12,7 @@ const jwt = require("jsonwebtoken");
 const cloudinary = require("cloudinary").v2;
 
 // middlewares
-app.use(cors({
-  origin: ["https://artistify-omega.vercel.app/"],
-  methods: ["GET","POST","PUT","DELETE"],
-  credentials:true
-}));
+app.use(cors());
 
 app.use(express.json({ limit: "200mb" }));
 
