@@ -13,11 +13,10 @@ const cloudinary = require("cloudinary").v2;
 
 // middlewares
 app.use(cors({
-  methods: ["GET", "POST", "PUT", "DELETE"],
-  credentials: true // If you need to support cookies or HTTP authentication
+    origin: ["https://artistify-omega.vercel.app"],
+    methods: ["GET","POST","PUT","DELETE"],
+    credentials:true
 }));
-
-app.options('*', cors());
 
 app.use(express.json({ limit: "200mb" }));
 
