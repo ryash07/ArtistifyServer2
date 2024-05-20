@@ -13,9 +13,9 @@ const cloudinary = require("cloudinary").v2;
 
 // middlewares
 app.use(cors({
-    origin: ["https://artistify-omega.vercel.app"],
-    methods: ["GET","POST","PUT","DELETE"],
-    credentials:true
+  origin: ["https://artistify-omega.vercel.app/"],
+  methods: ["GET","POST","PUT","DELETE"],
+  credentials:true
 }));
 
 app.use(express.json({ limit: "200mb" }));
